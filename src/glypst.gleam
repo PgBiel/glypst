@@ -116,6 +116,7 @@ fn parse_typst_diagnostics_aux(
   diagnostics: List(Diagnostic),
 ) -> List(Diagnostic) {
   case output_lines {
+    [""] -> parse_typst_diagnostics_aux([], diagnostics)
     [line, ..lines] -> {
       let assert Ok(pattern) =
         regex.from_string("(?:(.+):(\\d+):(\\d+): )?(warning|error): (.+)")
