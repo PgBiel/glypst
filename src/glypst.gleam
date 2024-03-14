@@ -111,70 +111,102 @@ fn convert_option_to_flags(option: CompileOption) -> List(String) {
 /// /path/to/file.typ:1:10: warning: something
 /// Or not:
 /// error: something
-///
-/// Additionally, a mapper may be used to convert the parsed diagnostics to another type
-/// on demand.
-fn parse_typst_diagnostics(
+fn parse_typst_diagnostics_aux(
   output_lines: List(String),
-  mapper mapper: fn(Diagnostic) -> a,
-) -> List(a) {
-  output_lines
-  |> list.flat_map(fn(line) {
-    let assert Ok(pattern) =
-      regex.from_string("(?:(.+):(\\d+):(\\d+): )?(warning|error): (.+)")
-    let matches =
-      line
-      |> regex.scan(with: pattern)
+  diagnostics: List(Diagnostic),
+) -> List(Diagnostic) {
+  case output_lines {
+    [line, ..lines] -> {
+      let assert Ok(pattern) =
+        regex.from_string("(?:(.+):(\\d+):(\\d+): )?(warning|error): (.+)")
+      let matches =
+        line
+        |> regex.scan(with: pattern)
 
-    case matches {
-      [
-        regex.Match(
-          submatches: [
-            Some(file),
-            Some(start),
-            Some(end),
-            Some(diagnostic_kind),
-            Some(message),
-          ],
-          ..,
-        ),
-      ] -> {
-        let assert Ok(start) = int.parse(start)
-        let assert Ok(end) = int.parse(end)
-        let span = Span(file, start, end)
-        let diagnostic = case diagnostic_kind {
-          "warning" -> DiagnosticWarning(TypstWarning(Some(span), message))
-          "error" -> DiagnosticError(TypstError(Some(span), message))
-          _ -> panic as "invalid diagnostic kind received"
+      case matches {
+        [
+          regex.Match(
+            submatches: [
+              Some(file),
+              Some(start),
+              Some(end),
+              Some(diagnostic_kind),
+              Some(message),
+            ],
+            ..,
+          ),
+        ] -> {
+          let assert Ok(start) = int.parse(start)
+          let assert Ok(end) = int.parse(end)
+          let span = Span(file, start, end)
+          let diagnostic = case diagnostic_kind {
+            "warning" -> DiagnosticWarning(TypstWarning(Some(span), message))
+            "error" -> DiagnosticError(TypstError(Some(span), message))
+            _ -> panic as "invalid diagnostic kind received"
+          }
+
+          parse_typst_diagnostics_aux(lines, [diagnostic, ..diagnostics])
         }
 
-        [mapper(diagnostic)]
-      }
+        [
+          regex.Match(
+            submatches: [
+              _file,
+              _start,
+              _end,
+              Some(diagnostic_kind),
+              Some(message),
+            ],
+            ..,
+          ),
+        ] -> {
+          let diagnostic = case diagnostic_kind {
+            "warning" -> DiagnosticWarning(TypstWarning(None, message))
+            "error" -> DiagnosticError(TypstError(None, message))
+            _ -> panic as "invalid diagnostic kind received"
+          }
 
-      [
-        regex.Match(
-          submatches: [
-            _file,
-            _start,
-            _end,
-            Some(diagnostic_kind),
-            Some(message),
-          ],
-          ..,
-        ),
-      ] -> {
-        let diagnostic = case diagnostic_kind {
-          "warning" -> DiagnosticWarning(TypstWarning(None, message))
-          "error" -> DiagnosticError(TypstError(None, message))
-          _ -> panic as "invalid diagnostic kind received"
+          parse_typst_diagnostics_aux(lines, [diagnostic, ..diagnostics])
         }
 
-        [mapper(diagnostic)]
-      }
+        _ ->
+          case diagnostics {
+            [DiagnosticWarning(TypstWarning(span, message)), ..tail_diagnostics] -> {
+              // An invalid diagnostic line is assumed to be part of the previous one.
+              let new_diagnostic =
+                DiagnosticWarning(TypstWarning(span, message <> "\n" <> line))
 
-      _ -> []
+              parse_typst_diagnostics_aux(lines, [
+                new_diagnostic,
+                ..tail_diagnostics
+              ])
+            }
+
+            [DiagnosticError(TypstError(span, message)), ..tail_diagnostics] -> {
+              let new_diagnostic =
+                DiagnosticError(TypstError(span, message <> "\n" <> line))
+
+              parse_typst_diagnostics_aux(lines, [
+                new_diagnostic,
+                ..tail_diagnostics
+              ])
+            }
+
+            [] -> parse_typst_diagnostics_aux(lines, [])
+          }
+      }
     }
-  })
+
+    [] -> diagnostics
+  }
+}
+
+fn parse_typst_diagnostics(output: String) -> List(Diagnostic) {
+  let lines =
+    output
+    |> string.split(on: "\n")
+
+  parse_typst_diagnostics_aux(lines, [])
 }
 
 /// Compiles some Typst source code to a file.
@@ -205,8 +237,8 @@ pub fn compile_to_file(
     Ok(output) ->
       Ok(Ok(
         output
-        |> string.split(on: "\n")
-        |> parse_typst_diagnostics(mapper: fn(diagnostic) {
+        |> parse_typst_diagnostics
+        |> list.map(fn(diagnostic) {
           // When the Typst command is successful, only warnings remain.
           let assert DiagnosticWarning(warning) = diagnostic
           warning
@@ -217,8 +249,7 @@ pub fn compile_to_file(
         1 ->
           Ok(Error(
             err
-            |> string.split(on: "\n")
-            |> parse_typst_diagnostics(mapper: fn(diagnostic) { diagnostic }),
+            |> parse_typst_diagnostics,
           ))
 
         // CLI error (not Typst error)
