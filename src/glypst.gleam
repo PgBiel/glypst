@@ -1,8 +1,9 @@
 import gleam/int
 import gleam/list
-import gleam/option.{type Option}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
+import gleam/regex
 import shellout
 
 /// Possible result from compilation with the CLI.
@@ -62,15 +63,20 @@ pub type CompileOption {
   Timings(output_path: String)
 }
 
+/// The source span of a diagnostic, if it is attached to one.
+pub type Span {
+  Span(file: String, start: Int, end: Int)
+}
+
 /// A Typst compilation warning. Does not interrupt compilation and can be
 /// returned even on success.
 pub type TypstWarning {
-  TypstWarning(file: String, start: Int, end: Int, message: String)
+  TypstWarning(span: Option(Span), message: String)
 }
 
 /// A Typst compilation error. Interrupts compilation.
 pub type TypstError {
-  TypstError(file: String, start: Int, end: Int, message: String)
+  TypstError(span: Option(Span), message: String)
 }
 
 /// A diagnostic returned by Typst during compilation.
@@ -101,6 +107,76 @@ fn convert_option_to_flags(option: CompileOption) -> List(String) {
   }
 }
 
+/// Parses lines of Typst diagnostics in the short form, which may either have a span:
+/// /path/to/file.typ:1:10: warning: something
+/// Or not:
+/// error: something
+///
+/// Additionally, a mapper may be used to convert the parsed diagnostics to another type
+/// on demand.
+fn parse_typst_diagnostics(
+  output_lines: List(String),
+  mapper mapper: fn(Diagnostic) -> a,
+) -> List(a) {
+  output_lines
+  |> list.flat_map(fn(line) {
+    let assert Ok(pattern) =
+      regex.from_string("(?:(.+):(\\d+):(\\d+): )?(warning|error): (.+)")
+    let matches =
+      line
+      |> regex.scan(with: pattern)
+
+    case matches {
+      [
+        regex.Match(
+          submatches: [
+            Some(file),
+            Some(start),
+            Some(end),
+            Some(diagnostic_kind),
+            Some(message),
+          ],
+          ..,
+        ),
+      ] -> {
+        let assert Ok(start) = int.parse(start)
+        let assert Ok(end) = int.parse(end)
+        let span = Span(file, start, end)
+        let diagnostic = case diagnostic_kind {
+          "warning" -> DiagnosticWarning(TypstWarning(Some(span), message))
+          "error" -> DiagnosticError(TypstError(Some(span), message))
+          _ -> panic as "invalid diagnostic kind received"
+        }
+
+        [mapper(diagnostic)]
+      }
+
+      [
+        regex.Match(
+          submatches: [
+            _file,
+            _start,
+            _end,
+            Some(diagnostic_kind),
+            Some(message),
+          ],
+          ..,
+        ),
+      ] -> {
+        let diagnostic = case diagnostic_kind {
+          "warning" -> DiagnosticWarning(TypstWarning(None, message))
+          "error" -> DiagnosticError(TypstError(None, message))
+          _ -> panic as "invalid diagnostic kind received"
+        }
+
+        [mapper(diagnostic)]
+      }
+
+      _ -> []
+    }
+  })
+}
+
 /// Compiles some Typst source code to a file.
 /// At the moment, the source must be in a file.
 ///
@@ -126,12 +202,25 @@ pub fn compile_to_file(
     |> list.append(["--diagnostic-format", "short", output])
 
   case run_typst_cli(typst, ["compile", source.path, ..args]) {
-    // TODO: Parse diagnostics
-    Ok(_) -> Ok(Ok([]))
+    Ok(output) ->
+      Ok(Ok(
+        output
+        |> string.split(on: "\n")
+        |> parse_typst_diagnostics(mapper: fn(diagnostic) {
+          // When the Typst command is successful, only warnings remain.
+          let assert DiagnosticWarning(warning) = diagnostic
+          warning
+        }),
+      ))
     Error(#(status, err)) ->
       case status {
-        // TODO: Parse diagnostics
-        1 -> Ok(Error([]))
+        1 ->
+          Ok(Error(
+            err
+            |> string.split(on: "\n")
+            |> parse_typst_diagnostics(mapper: fn(diagnostic) { diagnostic }),
+          ))
+
         // CLI error (not Typst error)
         _ -> Error(#(status, err))
       }
