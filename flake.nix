@@ -16,6 +16,7 @@
         nativeBuildInputs = [
           pkgs.gleam
           pkgs.erlang
+          pkgs.typst
         ];
       };
     });
