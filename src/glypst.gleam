@@ -9,6 +9,7 @@ import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
+import gleam/string_builder.{type StringBuilder}
 import shellout
 
 /// The Typst installation to use for commands.
@@ -40,6 +41,53 @@ fn run_typst_cli(
   }
 
   shellout.command(run: typst_path, with: arguments, in: ".", opt: [])
+}
+
+/// Runs the Typst CLI command and assumes it may output diagnostics based on
+/// the given Typst source code.
+///
+/// If it is successful (status code 0), parses the returned output looking for
+/// diagnostics, and separates the initial output from the found diagnostics.
+///
+/// If it is not successful and exits with status code 1, parses the returned
+/// output looking for diagnostics (usually there was an error then).
+///
+/// If it exits with some other status code, the code and the output are
+/// directly returned.
+fn run_typst_cli_then_map_diagnostics(
+  typst: Typst,
+  with arguments: List(String),
+  and_then mapper: fn(StringBuilder, List(Diagnostic)) -> a,
+) -> CliResult(Result(a, List(Diagnostic))) {
+  case run_typst_cli(typst, arguments) {
+    Ok(output) ->
+      Ok(
+        Ok({
+          let #(initial_output, diagnostics) =
+            output
+            |> compile.parse_typst_diagnostics
+
+          mapper(initial_output, diagnostics)
+        }),
+      )
+
+    Error(#(status, err)) ->
+      case status {
+        1 ->
+          Ok(
+            Error({
+              let #(_, diagnostics) =
+                err
+                |> compile.parse_typst_diagnostics
+
+              diagnostics
+            }),
+          )
+
+        // CLI error (not Typst error)
+        _ -> Error(#(status, err))
+      }
+  }
 }
 
 /// Converts a compilation option to the relevant paths.
@@ -80,40 +128,18 @@ pub fn compile_to_file(
     |> list.flat_map(convert_compile_option_to_flags)
     |> list.append(["--diagnostic-format", "short", output])
 
-  case run_typst_cli(typst, ["compile", source.path, ..args]) {
-    Ok(output) ->
-      Ok(
-        Ok({
-          let #(_, diagnostics) =
-            output
-            |> compile.parse_typst_diagnostics
-
-          diagnostics
-          |> list.map(fn(diagnostic) {
-            // When the Typst command is successful, only warnings remain.
-            let assert DiagnosticWarning(warning) = diagnostic
-            warning
-          })
-        }),
-      )
-
-    Error(#(status, err)) ->
-      case status {
-        1 ->
-          Ok(
-            Error({
-              let #(_, diagnostics) =
-                err
-                |> compile.parse_typst_diagnostics
-
-              diagnostics
-            }),
-          )
-
-        // CLI error (not Typst error)
-        _ -> Error(#(status, err))
-      }
-  }
+  run_typst_cli_then_map_diagnostics(
+    typst,
+    ["compile", source.path, ..args],
+    and_then: fn(_, diagnostics) {
+      diagnostics
+      |> list.map(fn(diagnostic) {
+        // When the Typst command is successful, only warnings remain.
+        let assert DiagnosticWarning(warning) = diagnostic
+        warning
+      })
+    },
+  )
 }
 
 /// Lists all fonts found by Typst in the default font paths of the system.
