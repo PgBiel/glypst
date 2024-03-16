@@ -1,15 +1,26 @@
 //// Glypst is a library which lets you easily interact with the Typst CLI
 //// through Gleam, using the amazing `shellout` library under the hood.
+
 import glypst/compile.{
   type CompileOption, type Diagnostic, type TypstSource, type TypstWarning,
   DiagnosticWarning, Pdf, Png, Svg,
 }
 import gleam/int
 import gleam/list
-import gleam/option.{type Option}
 import gleam/result
 import gleam/string
 import shellout
+
+/// The Typst installation to use for commands.
+pub type Typst {
+  /// Use the `typst` binary in the current $PATH.
+  /// Requires Typst to be installed, or the environment to be properly
+  /// configured.
+  FromEnv
+
+  /// Use the `typst` binary at the specified path.
+  FromPath(path: String)
+}
 
 /// Possible result from compilation with the CLI.
 /// Refers to errors produced by the CLI itself (e.g. invalid arguments)
@@ -20,15 +31,15 @@ pub type CliResult(a) =
 /// Internal utility function to run Typst with the given arguments at the
 /// current directory.
 fn run_typst_cli(
-  typst: Option(String),
+  typst: Typst,
   with arguments: List(String),
 ) -> CliResult(String) {
-  shellout.command(
-    run: option.unwrap(typst, or: "typst"),
-    with: arguments,
-    in: ".",
-    opt: [],
-  )
+  let typst_path = case typst {
+    FromEnv -> "typst"
+    FromPath(path) -> path
+  }
+
+  shellout.command(run: typst_path, with: arguments, in: ".", opt: [])
 }
 
 /// Converts a compilation option to the relevant paths.
@@ -59,7 +70,7 @@ fn convert_compile_option_to_flags(option: CompileOption) -> List(String) {
 /// least one error, it and other errors and warnings are returned in the same
 /// list.
 pub fn compile_to_file(
-  typst: Option(String),
+  typst typst: Typst,
   from source: TypstSource,
   to output: String,
   with options: List(CompileOption),
@@ -80,6 +91,7 @@ pub fn compile_to_file(
           warning
         }),
       ))
+
     Error(#(status, err)) ->
       case status {
         1 ->
@@ -95,14 +107,11 @@ pub fn compile_to_file(
 }
 
 /// Lists all fonts found by Typst in the default font paths of the system.
-/// Also includes any fonts in the paths of the given list of font paths, if
-/// any.
-///
-/// The first option must either be the path to a valid Typst binary, or None
-/// to use `typst` from the current PATH.
+/// Also includes any fonts within the directories in the given list of font
+/// paths, if given.
 pub fn fonts(
-  typst: Option(String),
-  font_paths: List(String),
+  typst typst: Typst,
+  include font_paths: List(String),
 ) -> CliResult(List(String)) {
   let font_path_args =
     font_paths
