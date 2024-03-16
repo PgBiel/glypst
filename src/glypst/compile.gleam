@@ -3,6 +3,7 @@
 import gleam/int
 import gleam/option.{type Option, None, Some}
 import gleam/string
+import gleam/string_builder.{type StringBuilder}
 import gleam/regex
 
 /// Format of the document output produced by Typst.
@@ -77,12 +78,16 @@ pub type TypstSource {
 /// /path/to/file.typ:1:10: warning: something
 /// Or not:
 /// error: something
+///
+/// Returns the lines before the first diagnostic as a single string and the
+/// list of parsed diagnostics.
 fn parse_typst_diagnostics_aux(
   output_lines: List(String),
+  initial_output: StringBuilder,
   diagnostics: List(Diagnostic),
-) -> List(Diagnostic) {
+) -> #(StringBuilder, List(Diagnostic)) {
   case output_lines {
-    [""] -> parse_typst_diagnostics_aux([], diagnostics)
+    [""] -> parse_typst_diagnostics_aux([], initial_output, diagnostics)
     [line, ..lines] -> {
       let assert Ok(pattern) =
         regex.from_string("(?:(.+):(\\d+):(\\d+): )?(warning|error): (.+)")
@@ -112,7 +117,10 @@ fn parse_typst_diagnostics_aux(
             _ -> panic as "invalid diagnostic kind received"
           }
 
-          parse_typst_diagnostics_aux(lines, [diagnostic, ..diagnostics])
+          parse_typst_diagnostics_aux(lines, initial_output, [
+            diagnostic,
+            ..diagnostics
+          ])
         }
 
         [
@@ -133,7 +141,10 @@ fn parse_typst_diagnostics_aux(
             _ -> panic as "invalid diagnostic kind received"
           }
 
-          parse_typst_diagnostics_aux(lines, [diagnostic, ..diagnostics])
+          parse_typst_diagnostics_aux(lines, initial_output, [
+            diagnostic,
+            ..diagnostics
+          ])
         }
 
         _ ->
@@ -143,7 +154,7 @@ fn parse_typst_diagnostics_aux(
               let new_diagnostic =
                 DiagnosticWarning(TypstWarning(span, message <> "\n" <> line))
 
-              parse_typst_diagnostics_aux(lines, [
+              parse_typst_diagnostics_aux(lines, initial_output, [
                 new_diagnostic,
                 ..tail_diagnostics
               ])
@@ -153,27 +164,36 @@ fn parse_typst_diagnostics_aux(
               let new_diagnostic =
                 DiagnosticError(TypstError(span, message <> "\n" <> line))
 
-              parse_typst_diagnostics_aux(lines, [
+              parse_typst_diagnostics_aux(lines, initial_output, [
                 new_diagnostic,
                 ..tail_diagnostics
               ])
             }
 
-            [] -> parse_typst_diagnostics_aux(lines, [])
+            [] -> {
+              // No diagnostics yet, so this line is part of the initial output.
+              let initial_output =
+                initial_output
+                |> string_builder.append("\n" <> line)
+
+              parse_typst_diagnostics_aux(lines, initial_output, [])
+            }
           }
       }
     }
 
-    [] -> diagnostics
+    [] -> #(initial_output, diagnostics)
   }
 }
 
-/// Parses the output of `typst compile --diagnostic-format short` into a list
-/// of diagnostics.
-pub fn parse_typst_diagnostics(output: String) -> List(Diagnostic) {
+/// Parses the output of `typst compile --diagnostic-format short` into a
+/// string (output before the first diagnostic) and a list of diagnostics.
+pub fn parse_typst_diagnostics(
+  output: String,
+) -> #(StringBuilder, List(Diagnostic)) {
   let lines =
     output
     |> string.split(on: "\n")
 
-  parse_typst_diagnostics_aux(lines, [])
+  parse_typst_diagnostics_aux(lines, string_builder.new(), [])
 }

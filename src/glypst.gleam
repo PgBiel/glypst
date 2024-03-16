@@ -82,23 +82,33 @@ pub fn compile_to_file(
 
   case run_typst_cli(typst, ["compile", source.path, ..args]) {
     Ok(output) ->
-      Ok(Ok(
-        output
-        |> compile.parse_typst_diagnostics
-        |> list.map(fn(diagnostic) {
-          // When the Typst command is successful, only warnings remain.
-          let assert DiagnosticWarning(warning) = diagnostic
-          warning
+      Ok(
+        Ok({
+          let #(_, diagnostics) =
+            output
+            |> compile.parse_typst_diagnostics
+
+          diagnostics
+          |> list.map(fn(diagnostic) {
+            // When the Typst command is successful, only warnings remain.
+            let assert DiagnosticWarning(warning) = diagnostic
+            warning
+          })
         }),
-      ))
+      )
 
     Error(#(status, err)) ->
       case status {
         1 ->
-          Ok(Error(
-            err
-            |> compile.parse_typst_diagnostics,
-          ))
+          Ok(
+            Error({
+              let #(_, diagnostics) =
+                err
+                |> compile.parse_typst_diagnostics
+
+              diagnostics
+            }),
+          )
 
         // CLI error (not Typst error)
         _ -> Error(#(status, err))
