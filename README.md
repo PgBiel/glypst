@@ -21,7 +21,8 @@ Further documentation can be found at <https://hexdocs.pm/glypst>.
 ## Development
 
 ```sh
+nix develop # Install dependencies, incl. Gleam, Erlang and Typst, using the flake (optional)
 gleam run   # Run the project
-gleam test  # Run the tests
+gleam test  # Run the tests (requires `typst` in the PATH)
 gleam shell # Run an Erlang shell
 ```
