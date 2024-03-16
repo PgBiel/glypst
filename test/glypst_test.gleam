@@ -1,5 +1,5 @@
 import glypst
-import glypst/compile.{DiagnosticError, TypstWarning, TypstError, Span}
+import glypst/compile.{DiagnosticError, Span, TypstError, TypstWarning}
 import gleeunit
 import gleeunit/should
 import gleam/option.{Some}
@@ -32,10 +32,16 @@ pub fn compiles_with_warnings_test() {
     |> should.be_ok
 
   first_warn
-  |> should.equal(TypstWarning(span: Some(Span(file: "test/samples/warn_ok.typ", line: 4, column: 0)), message: "no text within underscores"))
+  |> should.equal(TypstWarning(
+    span: Some(Span(file: "test/samples/warn_ok.typ", line: 4, column: 0)),
+    message: "no text within underscores",
+  ))
 
   second_warn
-  |> should.equal(TypstWarning(span: Some(Span(file: "test/samples/warn_ok.typ", line: 3, column: 0)), message: "no text within stars"))
+  |> should.equal(TypstWarning(
+    span: Some(Span(file: "test/samples/warn_ok.typ", line: 3, column: 0)),
+    message: "no text within stars",
+  ))
 }
 
 pub fn compilation_fails_with_error_test() {
@@ -50,5 +56,10 @@ pub fn compilation_fails_with_error_test() {
     |> should.be_error
 
   err
-  |> should.equal(DiagnosticError(TypstError(span: Some(Span(file: "test/samples/err.typ", line: 1, column: 1)), message: "panicked with: \"Oh no!\"")))
+  |> should.equal(
+    DiagnosticError(TypstError(
+      span: Some(Span(file: "test/samples/err.typ", line: 1, column: 1)),
+      message: "panicked with: \"Oh no!\"",
+    )),
+  )
 }
