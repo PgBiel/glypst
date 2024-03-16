@@ -42,9 +42,9 @@ pub type CompileOption {
   Timings(output_path: String)
 }
 
-/// The source span of a diagnostic, if it is attached to one.
+/// The source span at the start of a diagnostic, if it is attached to one.
 pub type Span {
-  Span(file: String, start: Int, end: Int)
+  Span(file: String, line: Int, column: Int)
 }
 
 /// A Typst compilation warning. Does not interrupt compilation and can be
