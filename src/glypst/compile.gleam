@@ -21,7 +21,7 @@ pub type ExportFormat {
   Svg
 }
 
-/// Optional parameters when compiling a Typst document.
+/// Common options when compiling a Typst document.
 pub type CompileOption {
   /// The root of the virtual filesystem exposed to Typst scripts.
   /// This path will be `/` within Typst, and files outside it cannot be
@@ -33,6 +33,10 @@ pub type CompileOption {
   /// valid font files (such as `.ttf` or `.otf`). You can use the `fonts`
   /// command to find out which font files Typst can find in these paths.
   FontPaths(List(String))
+}
+
+/// Options specific to exporting.
+pub type ExportOption {
   /// The document format to export the Typst document to.
   Format(ExportFormat)
   /// The resolution of the exported image in pixels-per-inch.

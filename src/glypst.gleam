@@ -2,8 +2,8 @@
 //// through Gleam, using the amazing `shellout` library under the hood.
 
 import glypst/compile.{
-  type CompileOption, type Diagnostic, type TypstSource, type TypstWarning,
-  DiagnosticWarning, Pdf, Png, Svg,
+  type CompileOption, type Diagnostic, type ExportOption, type TypstSource,
+  type TypstWarning, DiagnosticWarning, Pdf, Png, Svg,
 }
 import gleam/int
 import gleam/list
@@ -96,6 +96,12 @@ fn convert_compile_option_to_flags(option: CompileOption) -> List(String) {
     compile.Root(root) -> ["--root", root]
     compile.FontPaths(paths) ->
       list.flat_map(paths, fn(path) { ["--font-path", path] })
+  }
+}
+
+/// Converts an export option to the relevant paths.
+fn convert_export_option_to_flags(option: ExportOption) -> List(String) {
+  case option {
     compile.Format(Pdf) -> ["--format", "pdf"]
     compile.Format(Png) -> ["--format", "png"]
     compile.Format(Svg) -> ["--format", "svg"]
@@ -122,10 +128,19 @@ pub fn compile_to_file(
   from source: TypstSource,
   to output: String,
   with options: List(CompileOption),
+  with_export export_options: List(ExportOption),
 ) -> CliResult(Result(List(TypstWarning), List(Diagnostic))) {
-  let args =
+  let compile_args =
     options
     |> list.flat_map(convert_compile_option_to_flags)
+
+  let export_args =
+    export_options
+    |> list.flat_map(convert_export_option_to_flags)
+
+  let args =
+    compile_args
+    |> list.append(export_args)
     |> list.append(["--diagnostic-format", "short", output])
 
   run_typst_cli_then_map_diagnostics(

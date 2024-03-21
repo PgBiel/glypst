@@ -15,6 +15,7 @@ pub fn compiles_ok_test() {
       from: compile.SourceFile("./test/samples/ok.typ"),
       to: "./test/samples/ok.pdf",
       with: [],
+      with_export: [],
     )
     |> should.be_ok
     |> should.be_ok
@@ -27,6 +28,7 @@ pub fn compiles_with_warnings_test() {
       from: compile.SourceFile("./test/samples/warn_ok.typ"),
       to: "./test/samples/warn_ok.pdf",
       with: [],
+      with_export: [],
     )
     |> should.be_ok
     |> should.be_ok
@@ -51,6 +53,7 @@ pub fn compilation_fails_with_error_test() {
       from: compile.SourceFile("./test/samples/err.typ"),
       to: "./test/samples/err.pdf",
       with: [],
+      with_export: [],
     )
     |> should.be_ok
     |> should.be_error
