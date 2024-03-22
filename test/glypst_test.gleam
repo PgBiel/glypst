@@ -3,6 +3,9 @@ import glypst/compile.{Span, TypstError, TypstWarning}
 import gleeunit
 import gleeunit/should
 import gleam/option.{Some}
+import gleam/dynamic
+import gleam/string_builder
+import gleam/json
 
 pub fn main() {
   gleeunit.main()
@@ -63,4 +66,28 @@ pub fn compilation_fails_with_error_test() {
     span: Some(Span(file: "test/samples/err.typ", line: 1, column: 1)),
     message: "panicked with: \"Oh no!\"",
   ))
+}
+
+pub fn query_heading_succeeds_test() {
+  let assert #(query_result, _) =
+    glypst.query(
+      glypst.FromEnv,
+      from: compile.SourceFile("./test/samples/query.typ"),
+      matching: "heading",
+      with_compile: [],
+      with_query: [],
+    )
+    |> should.be_ok
+    |> should.be_ok
+
+  let matched_labels =
+    query_result
+    |> string_builder.to_string
+    |> json.decode(
+      dynamic.list(dynamic.field(named: "label", of: dynamic.string)),
+    )
+
+  matched_labels
+  |> should.be_ok
+  |> should.equal(["<lblA>", "<lblB>"])
 }

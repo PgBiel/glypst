@@ -17,6 +17,7 @@
           pkgs.gleam
           pkgs.erlang
           pkgs.typst
+          pkgs.rebar3
         ];
       };
     });
