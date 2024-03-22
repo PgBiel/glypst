@@ -1,8 +1,9 @@
 import glypst
 import glypst/compile.{Span, TypstError, TypstWarning}
+import glypst/query
 import gleeunit
 import gleeunit/should
-import gleam/option.{Some}
+import gleam/option.{None, Some}
 import gleam/dynamic
 import gleam/string_builder
 import gleam/json
@@ -90,4 +91,127 @@ pub fn query_heading_succeeds_test() {
   matched_labels
   |> should.be_ok
   |> should.equal(["<lblA>", "<lblB>"])
+}
+
+pub fn query_heading_label_succeeds_test() {
+  let assert #(query_result, _) =
+    glypst.query(
+      glypst.FromEnv,
+      from: compile.SourceFile("./test/samples/query.typ"),
+      matching: "heading",
+      with_compile: [],
+      with_query: [query.Field("label")],
+    )
+    |> should.be_ok
+    |> should.be_ok
+
+  let matched_labels =
+    query_result
+    |> string_builder.to_string
+    |> json.decode(dynamic.list(of: dynamic.string))
+
+  matched_labels
+  |> should.be_ok
+  |> should.equal(["<lblA>", "<lblB>"])
+}
+
+pub fn query_unknown_label_succeeds_test() {
+  let assert #(query_result, _) =
+    glypst.query(
+      glypst.FromEnv,
+      from: compile.SourceFile("./test/samples/query.typ"),
+      matching: "<lalalala>",
+      with_compile: [],
+      with_query: [query.Field("label")],
+    )
+    |> should.be_ok
+    |> should.be_ok
+
+  let matched_labels =
+    query_result
+    |> string_builder.to_string
+    |> json.decode(dynamic.list(of: dynamic.string))
+
+  matched_labels
+  |> should.be_ok
+  |> should.equal([])
+}
+
+pub fn query_one_label_succeeds_test() {
+  let assert #(query_result, _) =
+    glypst.query(
+      glypst.FromEnv,
+      from: compile.SourceFile("./test/samples/query.typ"),
+      matching: "<a>",
+      with_compile: [],
+      with_query: [query.One],
+    )
+    |> should.be_ok
+    |> should.be_ok
+
+  let matched_labels =
+    query_result
+    |> string_builder.to_string
+    |> json.decode(dynamic.field(named: "label", of: dynamic.string))
+
+  matched_labels
+  |> should.be_ok
+  |> should.equal("<a>")
+}
+
+pub fn query_one_label_with_yaml_succeeds_test() {
+  let assert #(query_result, _) =
+    glypst.query(
+      glypst.FromEnv,
+      from: compile.SourceFile("./test/samples/query.typ"),
+      matching: "<a>",
+      with_compile: [],
+      with_query: [query.Format(query.Yaml)],
+    )
+    |> should.be_ok
+    |> should.be_ok
+
+  query_result
+  |> string_builder.to_string
+  |> should.equal(
+    "\n- func: metadata
+  value: a
+  label: <a>\n",
+  )
+}
+
+pub fn query_one_heading_fails_test() {
+  let errors =
+    glypst.query(
+      glypst.FromEnv,
+      from: compile.SourceFile("./test/samples/query.typ"),
+      matching: "heading",
+      with_compile: [],
+      with_query: [query.One],
+    )
+    |> should.be_ok
+    |> should.be_error
+
+  errors
+  |> should.equal([
+    TypstError(span: None, message: "expected exactly one element, found 2"),
+  ])
+}
+
+pub fn query_one_unknown_figure_fails_test() {
+  let errors =
+    glypst.query(
+      glypst.FromEnv,
+      from: compile.SourceFile("./test/samples/query.typ"),
+      matching: "figure.where(kind: \"unknown\")",
+      with_compile: [],
+      with_query: [query.One],
+    )
+    |> should.be_ok
+    |> should.be_error
+
+  errors
+  |> should.equal([
+    TypstError(span: None, message: "expected exactly one element, found 0"),
+  ])
 }
