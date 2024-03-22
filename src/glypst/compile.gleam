@@ -1,5 +1,6 @@
 //// Types and functions for the `typst compile` command.
 
+import gleam/dict.{type Dict}
 import gleam/int
 import gleam/option.{type Option, None, Some}
 import gleam/string
@@ -33,6 +34,11 @@ pub type CompileOption {
   /// valid font files (such as `.ttf` or `.otf`). You can use the `fonts`
   /// command to find out which font files Typst can find in these paths.
   FontPaths(List(String))
+  /// Inputs (key/value pairs) to give to the Typst document.
+  /// Within Typst, they will be accessible under `sys.inputs.KEY`.
+  ///
+  /// WARNING: Keys must not have an "=" character, or Glypst will panic.
+  Inputs(Dict(String, String))
 }
 
 /// Options specific to exporting.

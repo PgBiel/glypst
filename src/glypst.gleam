@@ -5,6 +5,7 @@ import glypst/compile.{
   type CompileOption, type Diagnostic, type ExportOption, type TypstSource,
   type TypstWarning, DiagnosticWarning, Pdf, Png, Svg,
 }
+import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/result
@@ -96,6 +97,21 @@ fn convert_compile_option_to_flags(option: CompileOption) -> List(String) {
     compile.Root(root) -> ["--root", root]
     compile.FontPaths(paths) ->
       list.flat_map(paths, fn(path) { ["--font-path", path] })
+
+    compile.Inputs(inputs) ->
+      inputs
+      |> dict.to_list
+      |> list.flat_map(fn(pair) {
+        let #(key, value) = pair
+        case string.contains(does: key, contain: "=") {
+          True ->
+            panic as {
+              "Typst input keys cannot contain the equals sign (=). Got: "
+              <> key
+            }
+          False -> ["--input", key <> "=" <> value]
+        }
+      })
   }
 }
 
