@@ -1,5 +1,5 @@
 import glypst
-import glypst/compile.{Span, TypstError, TypstWarning}
+import glypst/compile.{CompileError, CompileWarning, Span}
 import glypst/query
 import gleeunit
 import gleeunit/should
@@ -38,13 +38,13 @@ pub fn compiles_with_warnings_test() {
     |> should.be_ok
 
   first_warn
-  |> should.equal(TypstWarning(
+  |> should.equal(CompileWarning(
     span: Some(Span(file: "test/samples/warn_ok.typ", line: 4, column: 0)),
     message: "no text within underscores",
   ))
 
   second_warn
-  |> should.equal(TypstWarning(
+  |> should.equal(CompileWarning(
     span: Some(Span(file: "test/samples/warn_ok.typ", line: 3, column: 0)),
     message: "no text within stars",
   ))
@@ -63,7 +63,7 @@ pub fn compilation_fails_with_error_test() {
     |> should.be_error
 
   err
-  |> should.equal(TypstError(
+  |> should.equal(CompileError(
     span: Some(Span(file: "test/samples/err.typ", line: 1, column: 1)),
     message: "panicked with: \"Oh no!\"",
   ))
@@ -218,7 +218,7 @@ pub fn query_one_heading_fails_test() {
 
   errors
   |> should.equal([
-    TypstError(span: None, message: "expected exactly one element, found 2"),
+    CompileError(span: None, message: "expected exactly one element, found 2"),
   ])
 }
 
@@ -236,6 +236,6 @@ pub fn query_one_unknown_figure_fails_test() {
 
   errors
   |> should.equal([
-    TypstError(span: None, message: "expected exactly one element, found 0"),
+    CompileError(span: None, message: "expected exactly one element, found 0"),
   ])
 }
