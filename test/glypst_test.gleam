@@ -69,6 +69,30 @@ pub fn compilation_fails_with_error_test() {
   ))
 }
 
+pub fn compilation_without_root_fails_test() {
+  glypst.compile_to_file(
+    glypst.FromEnv,
+    from: compile.SourceFile("./test/samples/import/imports.typ"),
+    to: "./test/samples/import/imports.pdf",
+    with: [],
+    with_export: [],
+  )
+  |> should.be_ok
+  |> should.be_error
+}
+
+pub fn compilation_with_root_succeeds_test() {
+  glypst.compile_to_file(
+    glypst.FromEnv,
+    from: compile.SourceFile("./test/samples/import/imports.typ"),
+    to: "./test/samples/import/imports.pdf",
+    with: [compile.Root("./test/samples")],
+    with_export: [],
+  )
+  |> should.be_ok
+  |> should.be_ok
+}
+
 pub fn query_heading_succeeds_test() {
   let assert #(query_result, _) =
     glypst.query(
