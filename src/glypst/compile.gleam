@@ -58,23 +58,13 @@ pub type Span {
   Span(file: String, line: Int, column: Int)
 }
 
-/// A Typst compilation warning. Does not interrupt compilation and can be
-/// returned even on success.
-pub type TypstWarning {
-  TypstWarning(span: Option(Span), message: String)
-}
-
-/// A Typst compilation error. Interrupts compilation.
-pub type TypstError {
-  TypstError(span: Option(Span), message: String)
-}
-
 /// A diagnostic returned by Typst during compilation.
 pub type Diagnostic {
-  /// A warning. This does not interrupt compilation.
-  DiagnosticWarning(TypstWarning)
-  /// An error. This interrupts compilation.
-  DiagnosticError(TypstError)
+  /// A Typst compilation warning. Does not interrupt compilation and can be
+  /// returned even on success.
+  TypstWarning(span: Option(Span), message: String)
+  /// A Typst compilation error. Interrupts compilation.
+  TypstError(span: Option(Span), message: String)
 }
 
 /// Possible Typst source code forms.
@@ -122,8 +112,8 @@ fn parse_typst_diagnostics_aux(
           let assert Ok(end) = int.parse(end)
           let span = Span(file, start, end)
           let diagnostic = case diagnostic_kind {
-            "warning" -> DiagnosticWarning(TypstWarning(Some(span), message))
-            "error" -> DiagnosticError(TypstError(Some(span), message))
+            "warning" -> TypstWarning(Some(span), message)
+            "error" -> TypstError(Some(span), message)
             _ -> panic as "invalid diagnostic kind received"
           }
 
@@ -146,8 +136,8 @@ fn parse_typst_diagnostics_aux(
           ),
         ] -> {
           let diagnostic = case diagnostic_kind {
-            "warning" -> DiagnosticWarning(TypstWarning(None, message))
-            "error" -> DiagnosticError(TypstError(None, message))
+            "warning" -> TypstWarning(None, message)
+            "error" -> TypstError(None, message)
             _ -> panic as "invalid diagnostic kind received"
           }
 
@@ -159,10 +149,9 @@ fn parse_typst_diagnostics_aux(
 
         _ ->
           case diagnostics {
-            [DiagnosticWarning(TypstWarning(span, message)), ..tail_diagnostics] -> {
+            [TypstWarning(span, message), ..tail_diagnostics] -> {
               // An invalid diagnostic line is assumed to be part of the previous one.
-              let new_diagnostic =
-                DiagnosticWarning(TypstWarning(span, message <> "\n" <> line))
+              let new_diagnostic = TypstWarning(span, message <> "\n" <> line)
 
               parse_typst_diagnostics_aux(lines, initial_output, [
                 new_diagnostic,
@@ -170,9 +159,8 @@ fn parse_typst_diagnostics_aux(
               ])
             }
 
-            [DiagnosticError(TypstError(span, message)), ..tail_diagnostics] -> {
-              let new_diagnostic =
-                DiagnosticError(TypstError(span, message <> "\n" <> line))
+            [TypstError(span, message), ..tail_diagnostics] -> {
+              let new_diagnostic = TypstError(span, message <> "\n" <> line)
 
               parse_typst_diagnostics_aux(lines, initial_output, [
                 new_diagnostic,

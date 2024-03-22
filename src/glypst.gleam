@@ -2,8 +2,8 @@
 //// through Gleam, using the amazing `shellout` library under the hood.
 
 import glypst/compile.{
-  type CompileOption, type Diagnostic, type ExportOption, type TypstSource,
-  type TypstWarning, DiagnosticWarning, Pdf, Png, Svg,
+  type CompileOption, type Diagnostic, type ExportOption, type TypstSource, Pdf,
+  Png, Svg,
 }
 import gleam/dict
 import gleam/int
@@ -145,7 +145,7 @@ pub fn compile_to_file(
   to output: String,
   with options: List(CompileOption),
   with_export export_options: List(ExportOption),
-) -> CliResult(Result(List(TypstWarning), List(Diagnostic))) {
+) -> CliResult(Result(List(Diagnostic), List(Diagnostic))) {
   let compile_args =
     options
     |> list.flat_map(convert_compile_option_to_flags)
@@ -162,14 +162,7 @@ pub fn compile_to_file(
   run_typst_cli_then_map_diagnostics(
     typst,
     ["compile", source.path, ..args],
-    and_then: fn(_, diagnostics) {
-      diagnostics
-      |> list.map(fn(diagnostic) {
-        // When the Typst command is successful, only warnings remain.
-        let assert DiagnosticWarning(warning) = diagnostic
-        warning
-      })
-    },
+    and_then: fn(_, diagnostics) { diagnostics },
   )
 }
 

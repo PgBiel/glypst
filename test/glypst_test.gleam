@@ -1,5 +1,5 @@
 import glypst
-import glypst/compile.{DiagnosticError, Span, TypstError, TypstWarning}
+import glypst/compile.{Span, TypstError, TypstWarning}
 import gleeunit
 import gleeunit/should
 import gleam/option.{Some}
@@ -59,10 +59,8 @@ pub fn compilation_fails_with_error_test() {
     |> should.be_error
 
   err
-  |> should.equal(
-    DiagnosticError(TypstError(
-      span: Some(Span(file: "test/samples/err.typ", line: 1, column: 1)),
-      message: "panicked with: \"Oh no!\"",
-    )),
-  )
+  |> should.equal(TypstError(
+    span: Some(Span(file: "test/samples/err.typ", line: 1, column: 1)),
+    message: "panicked with: \"Oh no!\"",
+  ))
 }
