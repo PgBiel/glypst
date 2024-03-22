@@ -5,6 +5,7 @@ import glypst/compile.{
   type CompileOption, type Diagnostic, type ExportOption, type TypstSource, Pdf,
   Png, Svg,
 }
+import glypst/query.{type QueryOption}
 import gleam/dict
 import gleam/int
 import gleam/list
@@ -91,7 +92,7 @@ fn run_typst_cli_then_map_diagnostics(
   }
 }
 
-/// Converts a compilation option to the relevant paths.
+/// Converts a compilation option to the relevant args.
 fn convert_compile_option_to_flags(option: CompileOption) -> List(String) {
   case option {
     compile.Root(root) -> ["--root", root]
@@ -115,7 +116,7 @@ fn convert_compile_option_to_flags(option: CompileOption) -> List(String) {
   }
 }
 
-/// Converts an export option to the relevant paths.
+/// Converts an export option to the relevant args.
 fn convert_export_option_to_flags(option: ExportOption) -> List(String) {
   case option {
     compile.Format(Pdf) -> ["--format", "pdf"]
@@ -123,6 +124,16 @@ fn convert_export_option_to_flags(option: ExportOption) -> List(String) {
     compile.Format(Svg) -> ["--format", "svg"]
     compile.Ppi(ppi) -> ["--ppi", int.to_string(ppi)]
     compile.Timings(output_path) -> ["--timings", output_path]
+  }
+}
+
+/// Converts a query option to the relevant args.
+fn convert_query_option_to_flags(option: QueryOption) -> List(String) {
+  case option {
+    query.Format(query.Json) -> ["--format", "json"]
+    query.Format(query.Yaml) -> ["--format", "yaml"]
+    query.Field(field) -> ["--field", field]
+    query.One -> ["--one"]
   }
 }
 
@@ -163,6 +174,41 @@ pub fn compile_to_file(
     typst,
     ["compile", source.path, ..args],
     and_then: fn(_, diagnostics) { diagnostics },
+  )
+}
+
+/// Queries all elements in the given Typst document matching the given selector
+/// expression (must be valid Typst syntax). Note that this requires compiling
+/// the document first, so compilation options are accepted as well.
+///
+/// See the documentation for the `compile` function to see in which
+/// circumstances the two nested `Result` objects returned by this function
+/// may error. In particular, when the query succeeds, a tuple with the query
+/// output and the list of produced warnings (if any) is returned.
+pub fn query(
+  typst typst: Typst,
+  from source: TypstSource,
+  matching selector: String,
+  with_compile compile_options: List(CompileOption),
+  with_query query_options: List(QueryOption),
+) -> CliResult(Result(#(StringBuilder, List(Diagnostic)), List(Diagnostic))) {
+  let compile_args =
+    compile_options
+    |> list.flat_map(convert_compile_option_to_flags)
+
+  let query_args =
+    query_options
+    |> list.flat_map(convert_query_option_to_flags)
+
+  let args =
+    compile_args
+    |> list.append(query_args)
+    |> list.append(["--diagnostic-format", "short", selector])
+
+  run_typst_cli_then_map_diagnostics(
+    typst,
+    ["query", source.path, ..args],
+    and_then: fn(output, diagnostics) { #(output, diagnostics) },
   )
 }
 
