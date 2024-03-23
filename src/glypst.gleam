@@ -2,8 +2,8 @@
 //// through Gleam, using the amazing `shellout` library under the hood.
 
 import glypst/compile.{
-  type CompileOption, type Diagnostic, type ExportOption, type TypstSource, Pdf,
-  Png, Svg,
+  type CompileOption, type Diagnostic, type ExportOption, type TypstCommandError,
+  type TypstSource, CliError, CompilationFailure, Pdf, Png, Svg,
 }
 import glypst/query.{type QueryOption}
 import gleam/dict
@@ -56,38 +56,30 @@ fn run_typst_cli(
 ///
 /// If it exits with some other status code, the code and the output are
 /// directly returned.
-fn run_typst_cli_then_map_diagnostics(
+fn run_typst_cli_with_diagnostics(
   typst: Typst,
   with arguments: List(String),
-  and_then mapper: fn(StringBuilder, List(Diagnostic)) -> a,
-) -> CliResult(Result(a, List(Diagnostic))) {
+) -> Result(#(StringBuilder, List(Diagnostic)), TypstCommandError) {
   case run_typst_cli(typst, arguments) {
     Ok(output) ->
-      Ok(
-        Ok({
-          let #(initial_output, diagnostics) =
-            output
-            |> compile.parse_typst_diagnostics
-
-          mapper(initial_output, diagnostics)
-        }),
-      )
+      Ok({
+        output
+        |> compile.parse_typst_diagnostics
+      })
 
     Error(#(status, err)) ->
       case status {
         1 ->
-          Ok(
-            Error({
-              let #(_, diagnostics) =
-                err
-                |> compile.parse_typst_diagnostics
+          Error({
+            let #(_, diagnostics) =
+              err
+              |> compile.parse_typst_diagnostics
 
-              diagnostics
-            }),
-          )
+            CompilationFailure(diagnostics)
+          })
 
         // CLI error (not Typst error)
-        _ -> Error(#(status, err))
+        _ -> Error(CliError(status, err))
       }
   }
 }
@@ -143,20 +135,21 @@ fn convert_query_option_to_flags(option: QueryOption) -> List(String) {
 /// When the Typst CLI itself fails (e.g. due to an invalid parameter value),
 /// the process status code is different from 0 (not successful) and from 1
 /// (compilation error). Therefore, the status code and the resulting message
-/// are directly returned in such a case.
+/// are directly returned under `CliError` (variant of `TypstCommandError`) in
+/// such a case.
 ///
 /// When the command is valid and accepted, the compilation is run, and the
 /// warnings and errors are collected. When there are only warnings, the
 /// compilation succeeds and they are returned via a list. When there's at
 /// least one error, it and other errors and warnings are returned in the same
-/// list.
+/// list, under `CompilationFailure` (also a `TypstCommandError`).
 pub fn compile_to_file(
   typst typst: Typst,
   from source: TypstSource,
   to output: String,
   with options: List(CompileOption),
   with_export export_options: List(ExportOption),
-) -> CliResult(Result(List(Diagnostic), List(Diagnostic))) {
+) -> Result(List(Diagnostic), TypstCommandError) {
   let compile_args =
     options
     |> list.flat_map(convert_compile_option_to_flags)
@@ -170,11 +163,11 @@ pub fn compile_to_file(
     |> list.append(export_args)
     |> list.append(["--diagnostic-format", "short", output])
 
-  run_typst_cli_then_map_diagnostics(
-    typst,
-    ["compile", source.path, ..args],
-    and_then: fn(_, diagnostics) { diagnostics },
-  )
+  run_typst_cli_with_diagnostics(typst, ["compile", source.path, ..args])
+  |> result.map(fn(output_with_warnings) {
+    let #(_, warnings) = output_with_warnings
+    warnings
+  })
 }
 
 /// Queries all elements in the given Typst document matching the given selector
@@ -182,16 +175,18 @@ pub fn compile_to_file(
 /// the document first, so compilation options are accepted as well.
 ///
 /// See the documentation for the `compile` function to see in which
-/// circumstances the two nested `Result` objects returned by this function
-/// may error. In particular, when the query succeeds, a tuple with the query
-/// output and the list of produced warnings (if any) is returned.
+/// circumstances an error may be returned by this function.
+/// This function will additionally error with a `CompilationFailure` if the
+/// selector is invalid.
+/// When the query succeeds, a tuple with the query output and the list of produced warnings
+/// (if any) is returned.
 pub fn query(
   typst typst: Typst,
   from source: TypstSource,
   matching selector: String,
   with_compile compile_options: List(CompileOption),
   with_query query_options: List(QueryOption),
-) -> CliResult(Result(#(StringBuilder, List(Diagnostic)), List(Diagnostic))) {
+) -> Result(#(StringBuilder, List(Diagnostic)), TypstCommandError) {
   let compile_args =
     compile_options
     |> list.flat_map(convert_compile_option_to_flags)
@@ -205,11 +200,7 @@ pub fn query(
     |> list.append(query_args)
     |> list.append(["--diagnostic-format", "short", selector])
 
-  run_typst_cli_then_map_diagnostics(
-    typst,
-    ["query", source.path, ..args],
-    and_then: fn(output, diagnostics) { #(output, diagnostics) },
-  )
+  run_typst_cli_with_diagnostics(typst, ["query", source.path, ..args])
 }
 
 /// Lists all fonts found by Typst in the default font paths of the system.

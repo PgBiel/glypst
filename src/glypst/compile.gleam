@@ -67,6 +67,18 @@ pub type Diagnostic {
   CompileError(span: Option(Span), message: String)
 }
 
+/// An error returned by a Typst command that triggers compilation, which can
+/// either fail at the compilation step or before, at the CLI itself.
+pub type TypstCommandError {
+  /// Typst compilation failed (status of 1).
+  /// Contains the parsed list of diagnostics raised by the compiler.
+  CompilationFailure(List(Diagnostic))
+  /// The Typst CLI itself produced an error.
+  /// For example, some parameter was given an invalid value.
+  /// This error is returned when the status is larger than 1.
+  CliError(status: Int, message: String)
+}
+
 /// Possible Typst source code forms.
 pub type TypstSource {
   /// Use a file's contents as source.
